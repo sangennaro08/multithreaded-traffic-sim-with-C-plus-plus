@@ -1,11 +1,19 @@
 #include <iostream>
+
+//librerie strutture dati
 #include <vector>
+#include <queue>
 #include <map>
+
+//librerie sincronizzazione concorrenza
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <semaphore>
 #include <atomic>
+
+//librerie in più come waiting,deallocazione automatica della memoria e 
+//random number generator
 #include <chrono>
 #include <memory>
 #include <random>
@@ -26,7 +34,6 @@ mutex scrittura_info;//scrivere cosa accade
 mutex finisci_programma;
 
 condition_variable continua;
-condition_variable get_direzione;
 
 class Incrocio;
 class Auto;
@@ -108,12 +115,17 @@ class Auto
     public:
 
     char nome;
-    short int lunghezza;
-    atomic<short int> incrocio_iniziale;
+
+    int lunghezza;
+    atomic<int> incrocio_iniziale;
     int tempo_incrocio;
     int tempo_di_arrivo;
+    int priorita;
+
     string direzione = "";
     string direzione_entrata = "";
+
+    bool choosed = false;
 
     mt19937 generatore;
 
@@ -128,6 +140,7 @@ class Auto
         this->lunghezza = distribution(generatore) % 5 +3;
         this->tempo_incrocio = (distribution(generatore) % 5 +1) * lunghezza; 
         this->tempo_di_arrivo = (int)((distribution(generatore) % 5 +1) * lunghezza)/3; 
+        this->priorita = tempo_incrocio * lunghezza;
     }
 
     ~Auto(){}
@@ -138,15 +151,17 @@ class Incrocio
 
     public:
 
-    short int auto_incrocio;
-    bool decide = false;//variabile per decidere se applicare o meno l'algortimo
+    int auto_incrocio;
+
+    bool decide = true;//variabile per decidere se applicare o meno l'algortimo
+
     counting_semaphore<tot_entrare_Incrocio> entrare;
 
     map<string, bool> direzioni = {
-        {"Avanti", true},
+        {"Destra", true},
         {"Sinistra", true},
         {"Dietro", true},
-        {"Destra", true}
+        {"Avanti", true}
     };
 
     vector <Auto*> auto_in_incrocio;
@@ -155,6 +170,8 @@ class Incrocio
     mutex sincronizza_auto;//mutex per algortimo,così solo un auto per incrociolo applica
     //mutex decidi_uscita;//mutex per decidere l'uscita,così solo un auto per incrocio decide
     mutex find_patter;
+
+    condition_variable get_direzione;
 
     Incrocio():auto_incrocio(tot_entrare_Incrocio),entrare(tot_entrare_Incrocio)    
     {}
@@ -174,15 +191,15 @@ class Incrocio
        Auto_in_gioco.reserve(auto_presenti);
 
         char nome = 'A';
-        int incrocio_idx = 0;
-        int auto_in_questo_incrocio = 0;
-
-        for(int i = 0; i < auto_presenti; i++)
+        
+        /*for(int i = 0; i < auto_presenti; i++)
         {
             // incrocio_idx è l'indice corretto (0-based)
             Auto* a = new Auto(nome++, incrocio_idx);
             Auto_in_gioco.push_back(a);
             Incroci.at(incrocio_idx)->auto_in_incrocio.push_back(a);
+
+            delete a;
 
             auto_in_questo_incrocio++;
 
@@ -190,14 +207,20 @@ class Incrocio
             if(auto_in_questo_incrocio == tot_entrare_Incrocio)
             {
                 auto_in_questo_incrocio = 0;
-                if(incrocio_idx + 1 < (int)tot_incroci)
+                if(incrocio_idx + 1 < tot_incroci)
                     incrocio_idx++;
             }
-        }
-        /*for(int i = 0; i < auto_presenti; i++)
-            for(int j = 0 ; j < tot_entrare_Incrocio; j++)
-                Auto_in_gioco.emplace_back(new Auto(i,j));*/
+        }*/
 
+        for(int i = 0;i <auto_presenti; i++)
+        {
+            int pos = decide_interception(Incroci);
+
+            Auto* a = new Auto(nome++, pos);
+
+            Auto_in_gioco.push_back(a);
+            Incroci.at(pos)->auto_in_incrocio.push_back(a);
+        }
     }
 
     void lancia_auto(vector<Auto*>& Auto_in_gioco,vector<unique_ptr<Incrocio>>& Incroci)
@@ -205,6 +228,24 @@ class Incrocio
         for(int i = 0; i < Auto_in_gioco.size(); i++)
             Auto_in_gioco.at(i)->th = thread(&Incrocio::simula_passaggio,Incroci.at(Auto_in_gioco.at(i)->incrocio_iniziale).get(),
                                             Auto_in_gioco.at(i),ref(Incroci),ref(Auto_in_gioco));                                   
+    }
+
+    void join_threads(vector<Auto*>& Auto_in_gioco)
+    {
+        for(auto& Auto : Auto_in_gioco)
+            if(Auto->th.joinable()) Auto->th.join();
+    }
+
+    private:
+
+    int decide_interception(vector <unique_ptr<Incrocio>>& Incroci)
+    {
+       for( ; ; )
+       {
+            int pos = (int) rand()% tot_incroci;
+            if(Incroci.at(pos)->auto_in_incrocio.size() < 3)
+                return pos;
+       }
     }
 
     void Arrivo_a_incrocio(Auto* A)
@@ -222,26 +263,17 @@ class Incrocio
     {
 
         int idx = A->incrocio_iniziale;
-        //int start;
 
-        //{
-        //    lock_guard <mutex> lock(Incroci.at(A->incrocio_iniziale)->sincronizza_auto); 
-        //    start = A->incrocio_iniziale;
-        //}
+        //
+        //Fase di arrivo all incrocio
+        //
+        Arrivo_a_incrocio(A);
+
         //Così ogni auto percorre tutti gli incroci
         for(int i = 0; i < Incroci.size(); i++)
         {
-            //{
-            //    lock_guard <mutex> lock(Incroci.at(start)->sincronizza_auto);
-            //idx = (start + i) % (int)tot_incroci;
-            //}
-            //
-            //Fase di arrivo all incrocio
-            //
-            Arrivo_a_incrocio(A);
-
             //Fase di entrata all'incrocio
-            //entrata,algortimo 
+            //entrata,algoritmo 
             if(Incroci.at(idx)->entrare.try_acquire())
             {
                 {
@@ -323,23 +355,68 @@ class Incrocio
                         }
                     }
 
+                    //
+                    //fase di scelta dell'auto
+                    //se l'auto non è scelta sta nell'incrocio e continua
+                    //la procedura del do-while cioè 
+                    //scelta di chi va al prossimo incrocio, SE POSSIBILE
+                    //
+
+                    //TODO fare funzione per vedere se l'auto DEVE rimanere all'incrocio o meno,
+                    //modo migliore usare do while con condition variable che restituisce true o false
+                    //in base alla decisione fatta
+
+                    do
                     {
-                        unique_lock<mutex> lock(Incroci.at(idx)->find_patter);
-
-                        if(!Incroci.at(idx)->decide)
                         {
-                            Incroci.at(idx)->decide = true;
-                            lock.unlock();
+                            unique_lock<mutex> lock(Incroci.at(idx)->find_patter);
 
-                            //Algoritmo per trovare l'uscita migliore nella situazione attuale
-                            //search_exit(A,Incroci);
+                            if(Incroci.at(idx)->decide)
+                            {
+                                Incroci.at(idx)->decide = false;
 
-                            //get_direzione.notify_all();
+                                //Algoritmo per trovare l'uscita migliore nella situazione attuale
+                                search_exit(A,Incroci,idx);
 
-                        }else{
-                            //get_direzione.wait(lock,[&]{return !Incroci.at(idx)->decide;});
-                        }  
+                                Incroci.at(idx)->decide = true;
+
+                                lock.unlock();
+                                get_direzione.notify_all();
+
+                            }else{
+                                //vedere se giusto
+                                Incroci.at(idx)->get_direzione.wait(lock,[&]{return Incroci.at(idx)->decide;});   
+                            }  
+                        }
+
+                    }while(!A->choosed && Incroci.at(idx)->auto_in_incrocio.size() > 1);
+
+                    //scelta delle auto
+                    {
+                        lock_guard <mutex> lock(scrittura_info);
+                        
+                        cout<<"L\'auto "<<A->nome<<" sta percorrendo l\'incrocio "
+                        <<A->incrocio_iniziale<<" e ci metterà "<<A->tempo_incrocio<<" secondi\n";
                     }
+
+                    this_thread::sleep_for(chrono::seconds(A->tempo_incrocio));
+
+                    //
+                    //fase di uscita dall'incrocio
+                    //esce dall'incrocio e settiamo il prossimo indice al prossimo incrocio
+
+                    //
+                    //TODO implementazione di una coda QUEUE in caso ci siano più auto che vanno alla stessa uscita,e rendere
+                    //la simulazione realistica
+                    //questo lo si fa adesso in quanto modifichiamo idx con il prossimo incrocio senza fare comandi aggiuntivi
+                    //
+                    //TODO se la QUEUE è 2+ allora ATTENZIONE PERCHè
+                    //1:vedere se l'incrocio è libero di 1 posto,MAX 3 ovviamente
+                    //se entrano 2 allo stesso momento può creare concorrenza e errori nel passaggio delle auto
+                    //
+                    //quindi fare un controllo continuo con un while con suddetto condition variable
+                    //se necessario per evitare consumi CPU così da vedere se l'auto in testa può accedere
+                    //all'incrocio,le altre auto aspetteranno,ovviamente è una coda stradale
 
                     Incroci.at(idx)->entrare.release(); 
                 }
@@ -354,7 +431,11 @@ class Incrocio
                     if(it != vec_corrente.end())
                         vec_corrente.erase(it);
                 }
-                            
+                
+                
+                //TODO implementare funzionalità QUEUE qui!!!
+                //dopo cè il cambio incrocio con il push_back!!!
+
                 {
                     lock_guard <mutex> lock(Incroci.at(next)->direzione);
                     // Aggiungi al vettore dell'incrocio successivo
@@ -365,43 +446,49 @@ class Incrocio
                 A->incrocio_iniziale = next;
                 idx = next;
             }
-
-            //if(++idx == 5)
-            //    A->incrocio_iniziale = 0;
         }
 
         if(++Auto_completate >= auto_presenti)
             continua.notify_all();
+
+        return;    
     }
 
+    //TODO fare funzione search_exit
     //Passo il vector di incroci così che possa comunicare con l'incrocio successivo
     //e se stesso così da poter fare scelte adatte al suo incrocio in base alla sua situazione
-    void search_exit(Auto* A,vector <unique_ptr<Incrocio>>& Incroci)
+    void search_exit(Auto* A,vector <unique_ptr<Incrocio>>& Incroci,int idx)
     {
         //COSA FA?
         //1)trakking del prossimo incrocio per capire quale entrata è libera
         //2)decidere quale auto passare al prossimo incrocio
         //3)in base alla situazione portare l'alto ad un uscita per evitare ingorghi
-        int next_incrocio = (A->incrocio_iniziale + 1 == tot_incroci) ? 0 : A->incrocio_iniziale + 1;
-        vector <string> direzioni_libere;
 
-        //{
-        //    lock_guard<mutex> lock(Incroci.at(next_incrocio)->direzione);
-        //    direzioni_libere = Incroci.at(next_incrocio)->direzioni;
-        //}
+        /*
+        LEGGI STRADALI:
+        1)le auto di destra hanno la precedenza SEMPRE NB:abbiamo solo 3 auto MAX per ogni incrocio
+
+        2)chi esce a sinistra in base alla situazione,si troverà a sinistra del prossimo incrocio
+        chi si esce a destra si troverà a destra del prossimo incrocio
+        chi esce in basso ha la possibilità di andare a sinistra o destra del prossimo incrocio
+        chi sale andrà al prossimo incrocio salendo 
+
+        3)tener conto che ogni auto deve essere consapevole se il prossimo incrocio è libero,
+        per questo devono controllare se il prossimo incrocio è libero o meno
+        SE è LIBERO,proseguire,altrimenti aspettare
+        */
+        int next_incrocio = (A->incrocio_iniziale + 1) % tot_incroci;
+        map <string, bool> direzioni_libere;
+
+        {
+            lock_guard<mutex> lock(Incroci.at(next_incrocio)->direzione);
+            direzioni_libere = Incroci.at(next_incrocio)->direzioni;
+        }
         
-
         for(int i = 0; i < auto_in_incrocio.size(); i++)
         {
             
         }
-
-    }
-
-    void join_threads(vector<Auto*>& Auto_in_gioco)
-    {
-        for(auto& Auto : Auto_in_gioco)
-            if(Auto->th.joinable()) Auto->th.join();
     }
 };
 
