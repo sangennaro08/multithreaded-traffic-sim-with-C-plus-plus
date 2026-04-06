@@ -19,6 +19,9 @@
 #include <random>
 #include <limits>
 
+//TODO vedere perchè è presente una assenza di auto andando avanti nel programma
+//causa:code in conflitto con il settaggio della posizione libera
+
 using namespace std;
 
 bool controll_variables();
@@ -118,7 +121,7 @@ class Auto
 
     public:
 
-    char nome;
+    int nome;
 
     atomic<int> incrocio_iniziale;
     int tempo_incrocio;
@@ -133,7 +136,7 @@ class Auto
 
     thread th;
 
-    Auto(char nome,int inizio):nome(nome),
+    Auto(int nome,int inizio):nome(nome),
     generatore(chrono::system_clock::now().time_since_epoch().count())
     {
         uniform_int_distribution<int> distribution(0, 5);
@@ -153,6 +156,7 @@ class Incrocio
     public:
 
     bool decide = true;//variabile per decidere se applicare o meno l'algortimo
+    int posti_liberi = 3;
 
     counting_semaphore <tot_entrare_Incrocio> entrare;
 
@@ -208,10 +212,9 @@ class Incrocio
 
         for(int i = 0;i <auto_presenti; i++)
         {
-            char nome = 'A' + i;
             int pos = decide_interception(Incroci);
 
-            Auto* a = new Auto(nome, pos);
+            Auto* a = new Auto(i, pos);
 
             Auto_in_gioco.push_back(a);
             Incroci.at(pos)->auto_in_incrocio.push_back(a);
@@ -259,6 +262,8 @@ class Incrocio
     {
 
         int idx = A->incrocio_iniziale;
+        int finish_last_interception = idx % tot_incroci;
+        const int last_intercetion = tot_incroci - 1;
         //
         //Fase di arrivo all incrocio
         //
@@ -268,17 +273,20 @@ class Incrocio
         //la condizione idx % Incroci.size() != 4 può anche essere tolta...
         //è solo per realismo ed evitare che un auto finisca il programma in mezzo ad un incrocio
         //e non a quello finale(sembra che scompaia e non va via fisicamente)
-        for(int i = 0; i < Incroci.size() || ((idx % tot_incroci) != (tot_incroci - 1)); i++)
+        for(int i = 0; i < Incroci.size() || (finish_last_interception != last_intercetion); i++)
         {
-
-            
 
             //Fase di entrata all'incrocio
             //entrata,algoritmo 
             if(Incroci.at(idx)->entrare.try_acquire())
             {
+                {
+                    lock_guard <mutex> lock(Incroci.at(idx)->direzione);
+
+                    Incroci.at(idx)->posti_liberi--;
+                }
                 
-                if(A->direzione == "" && A->direzione_entrata == "")
+                /*if(A->direzione == "" && A->direzione_entrata == "")
                 {
                     {
                         //ottengo il mutex dell'incrocio in cui sono dentro
@@ -307,6 +315,40 @@ class Incrocio
                         A->direzione = A->direzione_entrata;
                         A->direzione_entrata = "";                          
                     }
+                }*/
+
+                {
+                    lock_guard<mutex> lock(Incroci.at(idx)->direzione);
+
+                    // Caso 1: prima volta in assoluto → cerca una direzione libera
+                    if (A->direzione_entrata.empty())
+                    {
+                        for (auto& [dir, dispo] : Incroci.at(idx)->direzioni)
+                        {
+                            if (dispo)
+                            {
+                                A->direzione = dir;
+                                dispo = false;
+                                break;
+                            }
+                        }
+
+                    }else{
+
+                        // Caso 2: arriva da un incrocio precedente → usa la direzione prenotata
+                        // La direzione_entrata è già stata "prenotata" in search_exit
+                        // quindi NON serve settare dispo = false (già fatto)
+                        A->direzione = A->direzione_entrata;
+                        A->direzione_entrata = "";
+                    }
+                }
+
+                if (A->direzione.empty())
+                {
+                    Incroci.at(idx)->entrare.release();
+                    Incroci.at(idx)->posti_liberi++;
+                    i--;
+                    continue; // riprova al prossimo giro del for
                 }
 
                 {
@@ -321,33 +363,52 @@ class Incrocio
                     //se l'auto non è scelta sta nell'incrocio e continua
                     //la procedura del do-while cioè 
                     //scelta di chi va al prossimo incrocio, SE POSSIBILE
-                    //
+                    //    
                 A->choosed = false;
+
+                int tentativi = 0;
                 do
                 {
                     {
-                        unique_lock <mutex> lock(Incroci.at(idx)->find_patter);
+                        unique_lock<mutex> lock(Incroci.at(idx)->find_patter);
 
-                        if(Incroci.at(idx)->decide)
+                        if(Incroci.at(idx)->decide && !A->choosed)
                         {
                             Incroci.at(idx)->decide = false;
 
-                            //Algoritmo per trovare l'uscita migliore nella situazione attuale
-                            search_exit(A,Incroci,idx);
+                            search_exit(A, Incroci, idx);
 
                             Incroci.at(idx)->decide = true;
 
                             lock.unlock();
-                            Incroci.at(idx)->get_direzione.notify_all();
 
+                            Incroci.at(idx)->get_direzione.notify_all();
                         }else{
-                            //vedere se giusto
-                            Incroci.at(idx)->get_direzione.wait(lock,[&]{return Incroci.at(idx)->decide;});   
-                        }  
+                            Incroci.at(idx)->get_direzione.wait(lock,[&]{return A->choosed;});   
+                        }
                     }
 
-                }while(!A->choosed && /*Incroci.at(idx)->auto_in_incrocio.size() > 1*/ Incroci.at(idx)->tot_auto > 1);
+                    tentativi++; // incrementa sempre, dentro o fuori dal ramo if
 
+                    if(tentativi >= 3 && !A->choosed)
+                    {
+                        lock_guard<mutex> lock(Incroci.at((idx+1)%tot_incroci)->direzione);
+
+                        uniform_int_distribution<int> dist(0, 3);
+
+                        auto it = Incroci.at((idx+1)%tot_incroci)->direzioni.begin();
+                        do
+                        {
+                            it = Incroci.at((idx+1)%tot_incroci)->direzioni.begin();
+                            advance(it, dist(A->generatore));
+
+                        }while(it->first == "Avanti");
+
+                        A->direzione_entrata = it->first;
+                        A->choosed = true;
+                    }
+
+                }while(!A->choosed);
                     //scelta delle auto
                 {
                     lock_guard <mutex> lock(scrittura_info);
@@ -356,15 +417,15 @@ class Incrocio
                     <<A->incrocio_iniziale<<" e ci mette "<<A->tempo_incrocio<<" secondi\n\n";
                 }
 
-                this_thread::sleep_for(chrono::seconds(A->tempo_incrocio));
-
-                    //
-                    //fase di uscita dall'incrocio
-                    //si setta la direzione = "" in quanto stiamo andando fuori dall'incrocio e lo inseriamo nella queue
-                    //e settermo true la posizione dentro la hash map 
-
-
                 Incroci.at(idx)->entrare.release(); 
+
+                {
+                    lock_guard <mutex> lock(Incroci.at(idx)->direzione);
+
+                    Incroci.at(idx)->posti_liberi++;
+                }
+
+                int next = (idx + 1) % tot_incroci;
 
                 {
                     lock_guard <mutex> lock(Incroci.at(idx)->direzione);
@@ -380,13 +441,7 @@ class Incrocio
                     }*/
 
                     Incroci.at(idx)->direzioni.at(A->direzione) = true;
-                    A->direzione = "";
-                }
-
-                int next = (idx + 1) % tot_incroci;
-
-                {
-                    lock_guard <mutex> lock(Incroci.at(idx)->direzione);
+                    //A->direzione = "";
 
                     auto& vec_corrente = Incroci.at(idx)->auto_in_incrocio;
                     auto it = find(vec_corrente.begin(), vec_corrente.end(), A);
@@ -398,8 +453,52 @@ class Incrocio
                     Incroci.at(idx)->esci.notify_all();
                 }
 
+                this_thread::sleep_for(chrono::seconds(A->tempo_incrocio));
+
+                /*int next = (idx + 1) % tot_incroci;
+
+                {
+                    lock_guard <mutex> lock(Incroci.at(idx)->direzione);
+
+                    /*for(auto& [dir, pos] : Incroci.at(idx)->direzioni)
+                    {
+                        if(A->direzione == dir)
+                        {
+                            A->direzione = "";
+                            pos = true;                                
+                            break;
+                        }        
+                    }
+
+                    Incroci.at(idx)->direzioni.at(A->direzione) = true;
+                    //A->direzione = "";
+
+                    auto& vec_corrente = Incroci.at(idx)->auto_in_incrocio;
+                    auto it = find(vec_corrente.begin(), vec_corrente.end(), A);
+                    if(it != vec_corrente.end())
+                        vec_corrente.erase(it);
+
+                    Incroci.at(idx)->tot_auto--;
+
+                    Incroci.at(idx)->esci.notify_all();
+                }*/
+
+                    //
+                    //fase di uscita dall'incrocio
+                    //si setta la direzione = "" in quanto stiamo andando fuori dall'incrocio e lo inseriamo nella queue
+                    //e settermo true la posizione dentro la hash map 
+
+
+                //Incroci.at(idx)->entrare.release(); 
+
+                //Incroci.at(idx)->posti_liberi++;
+
                 //QUA L'AUTO è CERTA CHE ARRIVA AL PROSSIMO INCROCIO ADESSO CHE LI HO INSERITI DEVONO ASPETTARE
                 //
+                Arrivo_a_incrocio(A);
+
+                //ATTENTZIONE LA POSIZIONE LA PRENDE IN SEARCH_EXIT...DEADLOCK ASPETTANDO RISPOSTA DA NESSUNO!!!
+                bool in_coda = false;
                 {
                     unique_lock <mutex> lock(Incroci.at(next)->direzione);
 
@@ -412,7 +511,7 @@ class Incrocio
                             lock_guard <mutex> lock1(scrittura_info);
 
                             cout<<"L'auto "<<A->nome<<" aspetterà nella coda "<<A->direzione_entrata
-                            <<" dell'incrocio "<<A->incrocio_iniziale<<"\n\n";
+                            <<" dell'incrocio "<<next<<"\n\n";
                         }
 
                         Incroci.at(next)->esci.wait(lock,[&]
@@ -427,26 +526,70 @@ class Incrocio
                             lock_guard <mutex> lock1(scrittura_info);
 
                             cout<<"L'auto "<<A->nome<<" è uscito dalla coda "<<A->direzione_entrata
-                            <<" dell'incrocio "<<A->incrocio_iniziale<<"\n\n";
+                            <<" dell'incrocio "<<next<<"\n\n";
                         }   
+                    }
+                //}
+
+                /*{
+                    unique_lock<mutex> lock1(Incroci.at(next)->direzione);
+                    if(!(Incroci.at(next)->direzioni.at(A->direzione_entrata)))
+                    {
+                        Incroci.at(next)->code_entrata.at(A->direzione_entrata).push(A);
+                        in_coda = true;
+                        Incroci.at(next)->esci.wait(lock1, [&]{
+
+                            return Incroci.at(next)->code_entrata.at(A->direzione_entrata).front() == A && 
+                            Incroci.at(next)->direzioni.at(A->direzione_entrata);
+
+                        });
+                        Incroci.at(next)->code_entrata.at(A->direzione_entrata).pop();
                     }
                 }
 
+                if(in_coda)
                 {
-                    lock_guard <mutex> lock(Incroci.at(next)->direzione);
+                    lock_guard<mutex> lock(scrittura_info);
+                    cout << "L'auto " << A->nome << " è uscito dalla coda...\n";
+                }*/
+
+                //{
+                    //lock_guard <mutex> lock(Incroci.at(next)->direzione);
                     Incroci.at(next)->auto_in_incrocio.push_back(A);
+
+                    //TODO FORSE QUA FUNZIONA
+                    Incroci.at(next)->direzioni.at(A->direzione_entrata) = false;
                 }
                 // Aggiorna l'incrocio corrente dell'auto
                 A->incrocio_iniziale = next;
                 idx = next;
 
-                Arrivo_a_incrocio(A);
+                finish_last_interception = idx % tot_incroci;
+
+                //Arrivo_a_incrocio(A);
+            }else
+            {
+                cout<<"non ho preso il try_acquire!!! sono auto "<<A->nome<<" incrocio"<<A->incrocio_iniziale<<"\n\n";
             }
+        }
+
+        {
+            lock_guard <mutex> lock(Incroci.at(/*A->incrocio_iniziale*/tot_incroci - 1)->direzione);
+
+            Incroci.at(/*A->incrocio_iniziale*/tot_incroci - 1)->direzioni.at(A->direzione) = true;
+            A->direzione = "";
+            auto& vec_corrente = Incroci.at(/*A->incrocio_iniziale*/tot_incroci - 1)->auto_in_incrocio;
+            auto it = find(vec_corrente.begin(), vec_corrente.end(), A);
+            if(it != vec_corrente.end())
+                vec_corrente.erase(it);
+
+            Incroci.at(/*A->incrocio_iniziale*/tot_incroci - 1)->tot_auto--;
+
+            Incroci.at(/*A->incrocio_iniziale*/tot_incroci - 1)->esci.notify_all();
         }
 
         if(++Auto_completate >= auto_presenti)
             continua.notify_all();
-
             
         {
             lock_guard <mutex> lock(scrittura_info);
@@ -457,13 +600,19 @@ class Incrocio
     }
 
     //TODO controllare poi se la funzione search_exit è corretta
+
     void search_exit(Auto* A,vector <unique_ptr<Incrocio>>& Incroci,int idx)
     {
         //COSA FA?
 
+
         //TODO applicare questa funzionalità
         //far passare tante auto tanti quanti sono gli spazi vuoti del prossimo incrocio,
         //l'altra auto rimarrà all'incrocio.
+        //fare controlli come
+        //1)se sei entrato a destra,non esci a destra per andare al prossimo incrocio(vale per tutte le altre posizioni)
+        //2)se il posto libero è inacessibile ci saranno più auto che rimarranno all'incrocio
+
         int next_incrocio = (A->incrocio_iniziale + 1) % tot_incroci;
 
         //usato per controlli futuri per guardare il prossimo incrocio
@@ -473,6 +622,23 @@ class Incrocio
         {
             lock_guard <mutex> lock(Incroci.at(idx)->direzione);
             lock_guard <mutex> lock_next(Incroci.at(next_incrocio)->direzione);
+
+            int da_muovere = min(Incroci.at(next_incrocio)->posti_liberi, 
+                     (int)Incroci.at(idx)->auto_in_incrocio.size());
+
+            for(int i = 0; i < da_muovere; i++)
+            {
+                for(auto& [dir, pos] : Incroci.at(next_incrocio)->direzioni)
+                {
+                    if( pos && Incroci.at(idx)->auto_in_incrocio.at(i)->direzione_entrata != dir && dir != "Avanti")
+                    {
+                        Incroci.at(idx)->auto_in_incrocio.at(i)->direzione_entrata = dir;
+                        Incroci.at(idx)->auto_in_incrocio.at(i)->choosed = true;
+                        //pos = false;
+                        break;
+                    }
+                }
+            }
 
             /*if(Incroci.at(idx)->auto_in_incrocio.size() == 1)
             {
@@ -504,7 +670,7 @@ class Incrocio
                                  
                     Incroci.at(idx)->auto_in_incrocio.at(i)->choosed = true;
                     Incroci.at(idx)->auto_in_incrocio.at(i)->direzione_entrata = it->first;
-                }*/
+                }
                 for(int i = 0; i < Incroci.at(idx)->auto_in_incrocio.size(); i++)
                 {
                     vector <string> positions = {"Dietro","Sinistra","Destra"};
@@ -519,11 +685,12 @@ class Incrocio
                     Incroci.at(idx)->auto_in_incrocio.at(i)->direzione_entrata = positions.at(scelta);
                     //A->choosed = true;
                     //A->direzione_entrata = positions.at(scelta);
-                }
+                }*/
                 
             //}
         }  
     }
+    
 };
 
 int main()
@@ -569,7 +736,7 @@ void set_variables()
 
         cout<<"Non puoi inserire più di "<<tot_incroci * 3<<" auto\n\n";
 
-        cout<<"Inserire quante auto voler avere";
+        cout<<"Inserire quante auto voler avere\n\n";
         auto_presenti = valid(auto_presenti);
 
     }while(controll_variables());
