@@ -327,3 +327,7 @@ g++ Intersection.o Traffic_algorithm.o traffico.o -o simulator
 
 - C++20 or later (requires `std::counting_semaphore` and `std::scoped_lock`)
 - GCC or Clang with threading support (`-pthread` may be required on Linux)
+
+## 🧑‍💻 About me
+
+I'm a 17-year-old Italian high school student (4th year) passionate about C++/java/python and concurrent programming,currently learning web programming.
