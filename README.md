@@ -330,3 +330,30 @@ g++ Intersection.o Traffic_algorithm.o traffico.o -o simulator
 
 - C++20 or later (requires `std::counting_semaphore` and `std::scoped_lock`)
 - GCC or Clang with threading support (`-pthread` may be required on Linux)
+
+- ## 🧪 Testing
+
+Unit tests are written using [Google Test](https://github.com/google/googletest).
+
+### Test coverage
+
+- **Intersection** — initial state: all directions free, free_spots = 3, no vehicles, empty queues, Forward has no queue, 4 directions present
+- **Globals** — initial state of atomic counters, max_per_intersection
+- **Car** — name, start intersection, queues_entered starts at 0, add_queue increments correctly, crossing_time and arrival_time within expected ranges
+- **Ambulance** — name, entry_direction is "Back", siren starts false, percentage starts at 0, add_percentage increments correctly, reset_ambulance resets to 0, patients and timing within expected ranges
+
+### Build and run tests
+
+Requires [Google Test](https://github.com/google/googletest) compiled with MinGW.
+
+```bash
+g++ -std=c++20 test.cpp Intersection.cpp Traffic_algorithm.cpp -o test_runner -I"path/to/googletest/include" -L"path/to/googletest/lib" -lgtest -lgtest_main -pthread
+./test_runner
+```
+
+### Result
+
+```
+[==========] 25 tests from 4 test suites ran.
+[  PASSED  ] 25 tests.
+```
