@@ -1,3 +1,4 @@
+[Uploading UML structure.xml…]()
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
@@ -11,6 +12,12 @@ A multithreaded C++ traffic simulation where cars and ambulances navigate throug
 ## Overview
 
 Multiple car threads travel through a fixed chain of intersections in sequential order. Each intersection is a shared resource: vehicles compete for directional slots, queue externally when a slot is occupied, and proceed only when it is free. Ambulances are created at startup but launched dynamically during the simulation based on a probability threshold. If an ambulance spends too long in transit, it enters emergency rush mode and bypasses all normal traffic rules.
+
+## 📐 Architecture
+
+### UML Class Diagram
+
+![UML Class Diagram](./docs/uml.png)
 
 ---
 
