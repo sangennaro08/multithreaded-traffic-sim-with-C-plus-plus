@@ -2,6 +2,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
+## 🧑‍💻 About me
+
+I'm a 17-year-old Italian high school student (4th year) passionate about C++/java/python and concurrent programming,currently learning web programming.
+
 # Traffic Simulator
 
 A multithreaded C++ traffic simulation where cars and ambulances navigate through a chain of intersections using real concurrency primitives — mutexes, semaphores, and condition variables.
@@ -326,7 +330,3 @@ g++ Intersection.o Traffic_algorithm.o traffico.o -o simulator
 
 - C++20 or later (requires `std::counting_semaphore` and `std::scoped_lock`)
 - GCC or Clang with threading support (`-pthread` may be required on Linux)
-
-## 🧑‍💻 About me
-
-I'm a 17-year-old Italian high school student (4th year) passionate about C++/java/python and concurrent programming,currently learning web programming.
