@@ -1,3 +1,7 @@
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+
 # Traffic Simulator
 
 A multithreaded C++ traffic simulation where cars and ambulances navigate through a chain of intersections using real concurrency primitives — mutexes, semaphores, and condition variables.
