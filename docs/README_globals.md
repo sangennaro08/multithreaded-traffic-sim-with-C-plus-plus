@@ -1,4 +1,4 @@
-[← Back to main README](../README.md)
+[← Back to main README](../MAIN_README.md)
 
 # 📦 `globals.hpp` — Global State
 
