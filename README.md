@@ -247,7 +247,7 @@ The ambulance always enters intersection 0 from the `"Back"` direction. This is 
 
 ## Emergency Rush (`rush_to_hospital`)
 
-Triggered when `run()` returns true — i.e. elapsed time exceeds `120 / patients` seconds.
+Triggered when `run()` returns true if elapsed time exceeds `120 / patients` seconds.
 
 While `idx != last_intersection`:
 1. Calls `set_directions` on current intersection (acquires direction slot normally)
