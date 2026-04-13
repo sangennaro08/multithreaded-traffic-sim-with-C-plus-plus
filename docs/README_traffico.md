@@ -2,7 +2,7 @@
 
 # ▶️ `traffico.cpp` — Entry Point & Simulation Loop
 
-This is the program's entry point. It handles startup, launches all threads, and waits for the simulation to complete.
+This is the program's entry point. It handles startup, launches all threads, runs the main vehicle loop, and waits for the simulation to complete.
 
 ---
 
@@ -16,7 +16,7 @@ This is the program's entry point. It handles startup, launches all threads, and
 5. launch_cars()                — start one thread per car
 6. main thread waits on cv_continue
 7. join_threads()               — join all car and ambulance threads
-8. print per-car statistics
+8. print per-car statistics via Car::print_info()
 9. delete all vehicle objects
 ```
 
@@ -26,18 +26,16 @@ This is the program's entry point. It handles startup, launches all threads, and
 
 This is the core function run by every vehicle thread (both cars and ambulances). Each thread calls it once and runs to completion.
 
-### Full Flow
-
 ```
 1.  Record start time
 2.  Sleep arrival_time seconds  (simulates traveling to the first intersection)
-3.  Loop until all intersections have been crossed:
-    a.  try_acquire the semaphore
+3.  Loop until all intersections have been crossed and finish_last == last_intersection:
+    a.  try_acquire the semaphore (always succeeds since max 3 cars per intersection is enforced during initialization)
     b.  Decrement free_spots under direction_mutex
-    c.  Call set_directions to acquire exit_direction
+    c.  Call set_directions to assign exit_direction
     d.  Compute next = (idx + 1) % total_intersections
     e.  Call TrafficAlgorithm::start_algorithm to assign entry_direction for next intersection
-    f.  Release semaphore, increment free_spots
+    f.  Release semaphore and increment free_spots
     g.  Sleep crossing_time seconds
     h.  Call leave_intersection on current intersection
     i.  Sleep arrival_time seconds  (travel to next)
@@ -45,8 +43,8 @@ This is the core function run by every vehicle thread (both cars and ambulances)
     k.  Update idx and finish_last
     l.  Call run() — if true, call rush_to_hospital and break
 4.  Call leave_intersection on the last intersection
-5.  Call reset_ambulance()       (no-op for cars, resets percentage for ambulances)
-6.  If ambulances_launched < ambulances.size(): call add_percentage on next ambulance
+5.  Call reset_ambulance()       (no-op for cars, resets percentage to 0 for ambulances)
+6.  If ambulances_launched < ambulances.size(): call add_percentage on next ambulance in line
 7.  Call launch_ambulance()
 8.  Call exit_simulation()
 9.  Call get_time()
@@ -58,27 +56,8 @@ This is the core function run by every vehicle thread (both cars and ambulances)
 i < last_intersection || (finish_last != last_intersection)
 ```
 
-- `i < last_intersection` counts intersections crossed (runs for the first `total_intersections - 1` crossings)
-- `finish_last != last_intersection` catches vehicles that have not yet landed on the last intersection index, handling all starting positions correctly regardless of where the vehicle began
-
----
-
-## Ambulance Launch (`launch_ambulance`)
-
-Called by every vehicle after it completes `simulate_crossing`.
-
-1. Returns immediately if `ambulances_launched == ambulances.size()` (all already launched)
-2. Acquires both `ambulance_mutex` and `intersections.at(0)->direction_mutex` via `std::scoped_lock`
-3. Generates a random threshold between 0.8 and 1.0
-4. Checks:
-   - `ambulances.at(ambulances_launched)->percentage >= threshold`
-   - `intersections.at(0)->directions.at("Back") == true` (entry slot is free)
-5. If both true:
-   - Pushes the ambulance into `intersections.at(0)->vehicles_in_intersection`
-   - Increments `ambulances_active` and `ambulances_launched`
-   - Starts the ambulance thread running `simulate_crossing` from intersection 0
-
-The ambulance always enters intersection 0 from the `"Back"` direction — set in the `Ambulance` constructor and verified in `launch_ambulance` before launching.
+- `i < last_intersection` counts intersections crossed. Since `last_intersection = total_intersections - 1`, this runs for the first `total_intersections - 1` crossings.
+- `finish_last != last_intersection` catches any vehicle that has not yet landed on the last intersection index regardless of `i`, handling all starting positions correctly.
 
 ---
 
@@ -90,12 +69,7 @@ The main thread waits on `cv_continue` with the predicate:
 cars_completed >= total_cars && ambulances_active == 0
 ```
 
-After waking:
-- `join_threads` is called on all cars and all ambulances (only launched ones have a joinable thread)
-- Per-car statistics are printed via `Car::print_info()`
-- All vehicle objects are deleted
-
-Non-launched ambulances are never joined (their thread was never started) and simply have their memory freed.
+This means the simulation does not end until every car has exited the last intersection **and** every launched ambulance has also finished. After waking, the main thread calls `join_threads` on all cars and all ambulances (only launched ones have a joinable thread), prints per-car statistics, and deletes all vehicle objects.
 
 ---
 
@@ -104,21 +78,28 @@ Non-launched ambulances are never joined (their thread was never started) and si
 ```bash
 # Single command
 g++ -std=c++20 Intersection.cpp Traffic_algorithm.cpp traffico.cpp -o simulator
+```
 
-# Step by step (for low-memory systems / MinGW on Windows)
+If compilation runs out of memory (common on Windows with MinGW), compile separately:
+
+```bash
 g++ -std=c++20 -c Intersection.cpp -o Intersection.o
 g++ -std=c++20 -c Traffic_algorithm.cpp -o Traffic_algorithm.o
 g++ -std=c++20 -c traffico.cpp -o traffico.o
 g++ Intersection.o Traffic_algorithm.o traffico.o -o simulator
 ```
 
-**Requirements:** C++20 · GCC or Clang · `-pthread` may be required on Linux
+**Requirements:** C++20 or later · GCC or Clang with threading support · `-pthread` may be required on Linux
 
 ---
 
-## Tests
+## 🧪 Testing
 
-Unit tests use [Google Test](https://github.com/google/googletest) and cover initial state of all four modules.
+Unit tests are written using [Google Test](https://github.com/google/googletest).
+
+### Build and run tests
+
+Requires [Google Test](https://github.com/google/googletest) compiled with MinGW.
 
 ```bash
 g++ -std=c++20 test.cpp Intersection.cpp Traffic_algorithm.cpp -o test_runner \
@@ -126,10 +107,19 @@ g++ -std=c++20 test.cpp Intersection.cpp Traffic_algorithm.cpp -o test_runner \
 ./test_runner
 ```
 
+### Result
+
 ```
 [==========] 25 tests from 4 test suites ran.
 [  PASSED  ] 25 tests.
 ```
+
+### Test coverage
+
+- **Intersection** — initial state: all directions free, `free_spots` = 3, no vehicles, empty queues, `Forward` has no queue, 4 directions present
+- **Globals** — initial state of atomic counters, `max_per_intersection`
+- **Car** — name, start intersection, `queues_entered` starts at 0, `add_queue` increments correctly, `crossing_time` and `arrival_time` within expected ranges
+- **Ambulance** — name, `entry_direction` is `"Back"`, `siren` starts false, `percentage` starts at 0, `add_percentage` increments correctly, `reset_ambulance` resets to 0, `patients` and timing within expected ranges
 
 ### Test Coverage
 
