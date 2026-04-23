@@ -122,7 +122,7 @@ NB: This metric does not take into account classes, methods and attributes that 
 ---
 | Metric | Desciption | Involved| RET | DET | FP |
 |---|---|---|---|---|---|
-|ILF| Classes methods and variables visible to the final user | Vehicle(Car, Ambulance),Intersection | 3 | 13 | 7 (Low) ,7 (Low) Vehicle and Intersection are 2 different ILF so it counts to 14| 
+|ILF| Classes methods and variables visible to the final user | Vehicle(Car, Ambulance),Intersection | 3 | 13 | 7 (Low) ,7 (Low) Vehicle and Intersection are 2 different ILF so it counts up to 14| 
 |EIF| Files read like a sort of DB to extract and write data | None | 0 | 0 | 0 |
 |EI| Menage data through inputs | set_variables() | - | - | 3 (Low) |
 |EO| Ways to visualize the data AND the logic behind it | print_mutex, Traffic_algorithm.cpp | - | - | 4 (Low), 4(Low) |
