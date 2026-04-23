@@ -129,7 +129,7 @@ NB: This metric does not take into account classes, methods and attributes that 
 |EQ| Describes data from an archive (Arrays) so they can be saw by the final user | Car::print_info, show how many Ambulances are in game | - | - | 3 (Low), 3(Low) |
 
 | TOTAL POINTS |
-|---|
+|---|---|---|---|---|
 | ILF | EIF | EI | EO | EQ |
 | 14 | 0 | 3 | 8 | 6 |
 
