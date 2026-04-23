@@ -112,6 +112,40 @@ The codebase is split into focused README files — one per logical module:
 
 ---
 
+## FUNCTION POINTS BASED ON THE IFPUG METRIC
+
+the IFPUG metric gives FP (function points) based on how many RET(classes and methods) and DET(attributes) that are visible and undertandable to the user.
+
+```
+NB: This metric does not take into account classes, methods and attributes that are used behind the scenes ONLY the one that the final user can see and interact with.
+```
+---
+| Metric | Desciption | Involved| RET | DET | FP |
+|---|---|---|---|---|
+|ILF| Classes methods and variables visible to the final user | Vehicle(Car, Ambulance),Intersection | 3 | 13 | 7 (Low) ,7 (Low) Vehicle and Intersection are 2 different ILF so it counts to 14| 
+|EIF| Files read like a sort of DB to extract and write data | None | 0 | 0 | 0 |
+|EI| Menage data through inputs | set_variables() | - | - | 3 (Low) |
+|EO| Ways to visualize the data AND the logic behind it | print_mutex, Traffic_algorithm.cpp | - | - | 4 (Low), 4(Low) |
+|EQ| Describes data from an archive (Arrays) so they can be saw by the final user | Car::print_info, show how many Ambulances are in game | - | - | 3 (Low), 3(Low) |
+
+---
+
+---
+
+| TOTAL POINTS |
+|---|
+| ILF | EIF | EI | EO | EQ |
+| 14 | 0 | 3 | 8 | 6 |
+
+---
+
+---
+|TOTAL FP|
+|---|
+|31|
+
+---
+
 ## 👤 About Me
 
 I'm a 17-year-old Italian high school student (4th year) passionate about C++, Java, and Python with a focus on concurrent programming. Currently also learning web development.
