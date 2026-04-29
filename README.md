@@ -124,9 +124,9 @@ NB: This metric does not take into account classes, methods and attributes that 
 |---|---|---|---|---|---|
 |ILF| Classes methods and variables visible to the final user | Vehicle(Car, Ambulance),Intersection | 3 | 13 | 7 (Low) ,7 (Low) Vehicle and Intersection are 2 different ILF so it counts up to 14| 
 |EIF| Files read like a sort of DB to extract and write data | None | 0 | 0 | 0 |
-|EI| Menage data through inputs | set_variables() | - | - | 3 (Low) |
-|EO| Ways to visualize the data AND the logic behind it | print_mutex, Traffic_algorithm.cpp | - | - | 4 (Low), 4(Low) |
-|EQ| Describes data from an archive (Arrays) so they can be saw by the final user | Car::print_info, show how many Ambulances are in game | - | - | 3 (Low), 3(Low) |
+|EI| Menage data through inputs | set_variables() | 0 | 0 | 3 (Low) |
+|EO| Ways to visualize the data AND the logic behind it | print_mutex, Traffic_algorithm.cpp | 0 | 0 | 4 (Low), 4(Low) |
+|EQ| Describes data from an archive (Arrays) so they can be saw by the final user | Car::print_info, show how many Ambulances are in game | 0 | 0 | 3 (Low), 3(Low) |
 
 | | | TOTAL POINTS | | |
 | --- | --- | --- | --- | --- |
