@@ -13,6 +13,10 @@ add_executable(traffico
     Traffic_algorithm.cpp
     )
 
+find_package(Threads REQUIRED)
+
+target_link_libraries(traffico PRIVATE Threads::Threads)    
+
 set_target_properties(traffico PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/bin"
