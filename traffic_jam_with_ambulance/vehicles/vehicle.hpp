@@ -33,7 +33,7 @@ class Vehicle
 
     Vehicle(){}
 
-    virtual ~Vehicle(){}
+    virtual ~Vehicle() = default;
 
     // Car functions
     virtual void add_queue(){};
