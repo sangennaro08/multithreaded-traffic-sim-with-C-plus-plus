@@ -76,21 +76,13 @@ This means the simulation does not end until every car has exited the last inter
 ## Build
 
 ```bash
-# Single command
-g++ -std=c++20 Intersection.cpp Traffic_algorithm.cpp traffico.cpp -o simulator
+# Command lines
+cmake -S . -B build
+
+cmake --build build
 ```
 
-If compilation runs out of memory (common on Windows with MinGW), compile separately:
-
-```bash
-g++ -std=c++20 -c Intersection.cpp -o Intersection.o
-g++ -std=c++20 -c Traffic_algorithm.cpp -o Traffic_algorithm.o
-g++ -std=c++20 -c traffico.cpp -o traffico.o
-g++ Intersection.o Traffic_algorithm.o traffico.o -o simulator
-```
-
-**Requirements:** C++20 or later · GCC or Clang with threading support · `-pthread` may be required on Linux
-
+**Requirements:** C++20 or later · GCC or Clang with threading support · `-pthread` may be required on Linux but thanks to the use of CMakeLists this may run on multiple OS if the compiler is present on your sistem.
 ---
 
 ## 🧪 Testing
@@ -99,13 +91,7 @@ Unit tests are written using [Google Test](https://github.com/google/googletest)
 
 ### Build and run tests
 
-Requires [Google Test](https://github.com/google/googletest) compiled with MinGW.
-
-```bash
-g++ -std=c++20 test.cpp Intersection.cpp Traffic_algorithm.cpp -o test_runner \
-    -I"path/to/googletest/include" -L"path/to/googletest/lib" -lgtest -lgtest_main -pthread
-./test_runner
-```
+We used Google Test to see if the executable works, this file will be created when compiled normally with the command lines written before.
 
 ### Result
 
